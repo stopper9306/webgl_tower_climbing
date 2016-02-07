@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+
+<head>
+	<meta charset="utf-8"/>
+	<title>Баланс</title>
+
+	<script src="webgl-fmi.js"></script>
+	<script src="shaders.js"></script>
+	
+	<style>
+		body {
+			background-color: MediumSeaGreen;
+			text-align: center;
+			font-family: 'Arial Narrow', Verdana;
+			font-size: 0.65em;
+		}
+
+		canvas {
+			border: solid 1px Black;
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width:480px;
+			height:480px;
+			margin: -250px 0 0 -250px;
+			display: block;
+			box-shadow: 0 0 10em Black, 0 0 12px 1px MediumSeaGreen inset;
+			padding: 10px;
+			background-color: #d9ffd9;
+			transform: rotate(0deg);
+			cursor: none;
+		}
+		
+		div, a:visited, a:link {
+			color: #d9ffd9;
+		}
+		
+		#credits {
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+		}
+	</style>
+
+	
+<script>
+// буфер на тухла
+		var brickBuffer;
+
+		// тухла
+		Brick = function(center,color)
+		{
+			this.center = [center[0],center[1],1];
+			this.color = color;
+			
+			if (!brickBuffer)
+			{
+				var data = [
+						  0, 0,0,  0, 0,1,	// център
+						-23.5,-8.5,0,  0,-1,0,	// 4 периферни точки
+						-23.5,+8.5,0, -2, 1,1,
+						+23.5,+8.5,0, +2, 1,1,
+						+23.5,-8.5,0,  0,-1,0,
+						-23.5,-8.5,0,  0,-1,0,	// повторение на първата периферна точка
+						];
+				brickBuffer = gl.createBuffer();
+				gl.bindBuffer(gl.ARRAY_BUFFER,brickBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+			}
+		}
+		// тухла - рисуване
+		Brick.prototype.draw = function()
+		{
+			pushMatrix();
+			gl.vertexAttrib3fv(aColor,this.color);
+			translate(this.center);
+			useMatrix();
+			gl.drawArrays(gl.TRIANGLE_FAN,0,6);
+			gl.drawArrays(gl.LINE_LOOP,1,4);
+			popMatrix();
+		}
+		// подготовка за рисуване
+		function willDrawBricks()
+		{
+			gl.bindBuffer(gl.ARRAY_BUFFER,brickBuffer);
+			gl.enableVertexAttribArray(aXYZ);
+			gl.vertexAttribPointer(aXYZ,3,gl.FLOAT,false,6*FLOATS,0*FLOATS);
+			gl.enableVertexAttribArray(aNormal);
+			gl.vertexAttribPointer(aNormal,3,gl.FLOAT,false,6*FLOATS,3*FLOATS);
+		}
+
+
+
+		function start( )
+		{
+			var	canvas = document.getElementById("picasso");
+			canvas.addEventListener('webglcontextlost',function(event){event.preventDefault();},false);
+			canvas.addEventListener('webglcontextrestored',init,false);
+			window.addEventListener('mousemove',onMouseMove,false);
+			
+			init();
+			drawFrame();
+		}
+
+		function buildWall()
+		{
+			bricks = [];
+			
+			var dAmp1 = random(0,random(0,200));
+			var dAmp2 = random(0,random(0,200));
+			var dSca1 = random(10,200);
+			var dSca2 = random(10,200);
+			
+			// for (var x=-200; x<=200; x+=50)
+			// 	for (var y=0; y<=220; y+=20)
+			// 	{
+					var x=0;
+					var y=0;
+					// var y1 = 20+dAmp1*Math.cos(x/dSca1);
+					// var y2 = 220-dAmp2*Math.cos(x/dSca2);
+					// if (y1<=y && y<=y2)
+						bricks.push (new Brick([x,y], [random(0,1),random(0,1),random(0,1)]));
+				// }
+		}
+		
+		var shake = 0;
+		var tiltAngle = 0;
+		
+		var platformSpeed = [0,0,0];
+		var old = [0,0,0];
+
+		var spacePressed;
+		var leftPressed;
+		var rightPressed;
+		var downPressed;
+		var isFalling;
+
+		function gravity(){
+			if ( ball[0].center[1] < minBY){
+				isFalling=false;
+			} else if (isJumping == false && isFalling==true){
+				ball[0].center[1] -= dTime+1;
+				isFalling=true;
+			}
+		}
+
+		jumpDistanse=2;
+		var counter=0;
+		// var isFalling;
+		var isJumping;
+		function moveBall()
+		{
+			gravity();
+
+			if(rightPressed && spacePressed && isJumping==true){
+				counter+=2;
+				ball[0].center[1] += dTime+Math.sin(Math.PI * counter/180)*jumpDistanse;
+				ball[0].center[0] += dTime+1;
+				isJumping=true;
+				if(counter==360){
+					// alert("counter");
+					// rightPressed=false;
+					spacePressed=false;
+					isJumping=false;
+					isFalling=true;
+					counter=0;
+				}
+			} else if (leftPressed && spacePressed && isJumping==true){
+				counter+=2;
+				ball[0].center[1] += dTime+Math.sin(Math.PI * counter/180)*jumpDistanse;
+				ball[0].center[0] -= dTime+1;
+				isJumping=true;
+				// if(isFalling){
+				// 	console.log("Come on");
+				// }
+				if(counter==360){
+					// leftPressed=false;
+					spacePressed=false;
+					isJumping=false;
+					isFalling=true;
+					counter=0;
+				}
+			} else if (spacePressed && isJumping==true){
+				counter+=2;
+				ball[0].center[1] += dTime+Math.sin(Math.PI * counter/180)*jumpDistanse;
+				isJumping=true;
+				// if(isFalling){
+				// 	console.log("Come on");
+				// }
+				// ball[0].center[0] -= dTime+1;
+				if(counter==360){
+					leftPressed=false;
+					spacePressed=false;
+					isFalling=true;
+					isJumping=false;
+					counter=0;
+				}
+			}
+
+			if(leftPressed && spacePressed == false){
+				ball[0].center[0] -= dTime+1;
+				counter=0;
+				isJumping=false;
+				// isFalling
+				// if(isFalling){
+				// 	console.log("Come on");
+				// }
+			}
+
+			if(rightPressed && spacePressed == false) {
+				ball[0].center[0] += dTime+1;
+				counter=0;
+				isJumping=false;
+				// if(isFalling){
+				// 	console.log("Come on");
+				// }
+			}
+
+			if(downPressed){
+				// ball[0].center[1] -= dTime+1;
+				// counter=0;
+				// isJumping=false;
+				// isFalling=false;
+				isJumping=false;
+				rightPressed=false;
+				leftPressed=false;
+
+			}
+			
+			// удар в лява или дясна стена
+			if ( ball[0].center[0] > maxBX)
+				 ball[0].center[0] = maxBX, speed[0]*=-1, shake=1;
+			if ( ball[0].center[0] < minBX)
+				 ball[0].center[0] = minBX, speed[0]*=-1, shake=1;
+			
+			// удар в долна или горна
+			// if ( ball[0].center[1] > maxBY)
+			// 	 ball[0].center[1] = maxBY, speed[1]*=-1, shake=1;
+			if ( ball[0].center[1] < minBY)
+				 ball[0].center[1] = minBY, speed[1]*=-1, shake=1;
+
+
+
+
+			var ballCenterHeight=ball[0].center[1];
+			var ballCenterWidth=ball[0].center[0];
+
+			if(Math.abs(ballCenterHeight - bricks[0].center[1])<=20 && 
+				Math.abs(ballCenterWidth - bricks[0].center[0])<=35){
+				console.log("Take Action the ball is too close !!!");
+				if(ballCenterHeight - bricks[0].center[1] <=0){
+					isFalling=true;
+					isJumping=false;
+				} else if(ballCenterHeight - bricks[0].center[1]>0){
+					isFalling=false;
+				}
+			} else {
+				isFalling=true;
+			}
+
+
+			// var y=ball[0].center[1];
+			// if (y<bricks[0].center[1]-10) {
+			// 	isFalling=false;
+			// 	console.log("Center 1 BallCenter is smaller");
+			// }else{
+				
+			// }
+			// if (y>bricks[0].center[1]+10) {
+			// 	isFalling=false;
+			// 	console.log("Center 0 BallCenter is bigger");
+			// }else {
+				
+			// }
+
+			// var x = ball[0].center[0];
+			// if (x<bricks[0].center[0]-25){
+			// 	isFalling=false;
+			// 	console.log("Center 0 BallCenter is smaller");
+			// } else {
+			// 	console.log("Center 0 BallCenter is bigger");
+			// }
+			// if (x>bricks[0].center[0]+25){
+			// 	isFalling=false;
+			// } else {
+				
+			// }
+
+
+			// удар в тухла
+			// for (var i=0; i<bricks.length; i++)
+			// {
+			// 	var y = ball[0].center[1];
+			// 	if (y<bricks[i].center[1]-10) continue;
+			// 	if (y>bricks[i].center[1]+10) continue;
+
+			// 	var x = ball[0].center[0];
+			// 	if (x<bricks[i].center[0]-25) continue;
+			// 	if (x>bricks[i].center[0]+25) continue;
+				
+			// 	var dX = Math.min(
+			// 				Math.abs(bricks[i].center[0]-25-x),
+			// 				Math.abs(bricks[i].center[0]+25-x) );
+			// 	var dY = Math.min(
+			// 				Math.abs(bricks[i].center[1]-10-y),
+			// 				Math.abs(bricks[i].center[1]+10-y) );
+			// 	if (dX<dY)
+			// 		speed[0] *= -1;
+			// 	else
+			// 		speed[1] *= -1;
+
+			// 	// ударена е тухла с индекс i
+			// 	// bricks.splice(i,1); // махаме я от стената
+			// 	// hB++;
+			// 	// hitBrick[hB%6].play();
+				
+			// 	break;
+			// }
+			
+			// въртене на шиповете
+			// for (var i=0; i<3; i++)
+			// 	ball[i].rot = [40*i+300*time];
+		}
+
+		var goUp=0;
+
+		function init()
+		{
+			gl = getContext("picasso");
+			glprog = getProgram(vShader,fShader);
+			getVariables();
+
+			gl.enable(gl.DEPTH_TEST);
+			gl.clearColor(0.85,1,0.85,1);
+
+			identity();
+			ortho(gl.canvas.width,gl.canvas.height,-100,100);
+
+			gl.uniform3f(uAmbientColor,0.5,0.5,0.5);
+			gl.uniform3f(uDiffuseColor,0.8,0.8,0.8);
+			gl.uniform3f(uLightDir,0,0,-1);
+
+			buildWall();
+
+			// platform = [];
+			// platform.push( new Spheroid([0,-100,10],[30,30,20]) );
+			// platform.push( new Spheroid([0,-100,10],[24,24,30]) );
+			// platform[0].color = [0.6,1,0.7];
+			// platform[1].color = [0.2,0.5,0.3];
+			// platform[1].center = platform[0].center;
+			
+			ball = [];
+			for (var i=0; i<3; i++)
+			{
+				ball.push( new Pyramid([0,-50,0],10,100,3) );
+				ball[i].color = [0.1,0.3,0.2];
+				ball[i].rot = [40*i];
+				ball[i].center = ball[0].center;
+			}
+			speed = [50,100];
+			
+			// граници на платформата
+			// maxX = gl.canvas.offsetWidth/2-platform[0].size[0]-12;
+			// minX = -maxX;
+			// maxY = gl.canvas.offsetHeight/2-platform[0].size[0]-12;
+			// minY = -maxY;
+			
+			// граници на топчето
+			maxBX = gl.canvas.offsetWidth/2-ball[0].size-10;
+			minBX = -maxBX;
+			maxBY = gl.canvas.offsetHeight/2-ball[0].size-10;
+			minBY = -maxBY;
+
+			isJumping=false;
+			isFalling=true;
+			
+			// близост между топчето и платформата
+			// rR = ball[0].size+platform[0].size[0];
+			
+			requestAnimationFrame(drawFrame);
+		}
+
+		var dTime=0;
+		oldTime = now();
+		var brickVar= (new Brick([0,0],[1,1,1]));
+
+		function drawFrame()
+		{
+			time = now();
+			// dTime = time-oldTime;
+			// dTime
+			oldTime = time;
+
+			gl.clear(gl.COLOR_BUFFER_BIT+gl.DEPTH_BUFFER_BIT);
+			
+			identity();
+			lookAt([0,goUp,100],[0,goUp,0],[0,1,0]);
+
+			// рисуване на стената
+			gl.uniform1i(uUseNormalMatrix,false);
+			gl.uniform1i(uUseNormalMatrix,false);
+			willDrawBricks();
+			for (var i=0; i<bricks.length; i++)
+				bricks[i].draw();
+				
+			moveBall();	
+
+			for (var i=0; i<3; i++) ball[i].draw();
+			
+			requestAnimationFrame(drawFrame);
+		}
+
+		function start( )
+		{
+			var	canvas = document.getElementById("picasso");
+			canvas.addEventListener('webglcontextlost',function(event){event.preventDefault();},false);
+			canvas.addEventListener('webglcontextrestored',init,false);
+			window.addEventListener('keydown',keyPressed,false);
+			// window.addEventListener('keyup',spacePressedd,false);
+			// window.addEventListener('keyup', keyReleased,false);
+			init();
+			drawFrame();
+		}
+
+		// function keyReleased(e){
+		// if (e.keyCode == "65") {
+
+	 //    	leftPressed=false;
+	 //        // alert("The 'a' key is pressed.");
+	 //    } 
+
+	 //    if (e.keyCode == "68") {
+	 //    	rightPressed =false;
+	 //        // alert("The 'd' key is pressed.");
+	 //    }
+
+	 //     if (e.keyCode == "83") {
+	 //        downPressed=false;
+	 //        // alert("The 's' key is pressed.");
+	 //    }
+
+	 //    if (e.keyCode == "32") {
+
+		//         // alert("The 'space' key is pressed.");
+		//         // dTime +=2000;
+		//         // moveBall();
+		//         // spacePressed=true;
+		//         // isJumping=true;
+		//         // leftPressed=false;
+		//         // rightPressed =false;
+		//         downPressed=false;
+		// }
+
+		// }
+
+		function keyPressed(e) {
+	    if (e.keyCode == "65") {
+
+	    	leftPressed=true;
+	    	rightPressed =false;
+	    	spacePressed=false;
+	    	downPressed=false;
+	        // alert("The 'a' key is pressed.");
+	    } 
+
+	    if (e.keyCode == "68") {
+	    	rightPressed =true;
+	    	spacePressed=false;
+	        leftPressed=false;
+	        downPressed=false;
+	        // alert("The 'd' key is pressed.");
+	    }
+
+	     if (e.keyCode == "83") {
+	    	rightPressed =false;
+	    	spacePressed=false;
+	        leftPressed=false;
+	        downPressed=true;
+	        // alert("The 's' key is pressed.");
+	    }
+
+	    if (e.keyCode == "32") {
+
+		        // alert("The 'space' key is pressed.");
+		        // dTime +=2000;
+		        // moveBall();
+		        spacePressed=true;
+		        isJumping=true;
+		        // leftPressed=false;
+		        // rightPressed =false;
+		        downPressed=false;
+		}
+
+		if(e.keyCode == "38"){
+			goUp+=5;
+		}
+
+		if(e.keyCode == "40"){
+			goUp-=5;
+		}
+	}
+		
+	</script>
+</head>
+
+<body onload="start()">
+	<noscript>
+		Искаме JavaScript, но няма!
+	</noscript>
+	
+	<canvas id="picasso" width="480" height="480">
+		Искаме canvas, но няма!
+	</canvas>
+	
+</body>
